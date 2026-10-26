@@ -1,15 +1,28 @@
 from datetime import datetime, date, time, timedelta, timezone
-from app import models
 from sqlalchemy.exc import IntegrityError
+from app import models
 
 EAT = timezone(timedelta(hours=3))  # Nairobi, no daylight saving
 SLOT = timedelta(minutes=30)
+
+
+class BookingError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
 
 
 def as_utc(dt: datetime) -> datetime:
     # SQLite returns naive datetimes; we always store UTC
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def to_utc(dt: datetime) -> datetime:
+    # Input without a timezone is treated as Nairobi time
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=EAT)
     return dt.astimezone(timezone.utc)
 
 
@@ -44,18 +57,6 @@ def get_available_slots(db, doctor_id: int, day: date):
                 slots.append(start)
             cur += SLOT
     return sorted(slots)
-
-class BookingError(Exception):
-    def __init__(self, status_code: int, detail: str):
-        self.status_code = status_code
-        self.detail = detail
-
-
-def to_utc(dt: datetime) -> datetime:
-    # Input without a timezone is treated as Nairobi time
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=EAT)
-    return dt.astimezone(timezone.utc)
 
 
 def validate_slot(db, doctor_id: int, start: datetime):
@@ -100,6 +101,42 @@ def book_appointment(db, doctor_id: int, patient_id: int, start: datetime):
     try:
         db.commit()
     except IntegrityError:  # two requests at the same instant
+        db.rollback()
+        raise BookingError(409, "That slot was just booked by someone else.")
+    db.refresh(appt)
+    return appt
+
+
+def cancel_appointment(db, appointment_id: int, reason: str):
+    appt = db.get(models.Appointment, appointment_id)
+    if not appt:
+        raise BookingError(404, "Appointment not found.")
+    if appt.status == "cancelled":
+        raise BookingError(409, "Appointment is already cancelled.")
+    appt.status = "cancelled"
+    appt.cancel_reason = reason
+    db.commit()
+    db.refresh(appt)
+    return appt
+
+
+def reschedule_appointment(db, appointment_id: int, new_start: datetime):
+    appt = db.get(models.Appointment, appointment_id)
+    if not appt:
+        raise BookingError(404, "Appointment not found.")
+    if appt.status == "cancelled":
+        raise BookingError(409, "Cannot reschedule a cancelled appointment.")
+
+    new_start = to_utc(new_start)
+    if new_start == as_utc(appt.start_time):
+        raise BookingError(400, "Appointment is already at that time.")
+    validate_slot(db, appt.doctor_id, new_start)  # same rules as a fresh booking
+
+    appt.start_time = new_start
+    appt.end_time = new_start + SLOT
+    try:
+        db.commit()
+    except IntegrityError:
         db.rollback()
         raise BookingError(409, "That slot was just booked by someone else.")
     db.refresh(appt)
