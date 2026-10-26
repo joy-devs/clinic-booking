@@ -4,12 +4,14 @@ from app.database import Base, engine
 from app import models
 from app.routers import doctors, appointments
 from app.services.booking import BookingError
+from app.routers import doctors, appointements, patients
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Clinic Booking API")
 app.include_router(doctors.router)
 app.include_router(appointments.router)
+app.include_router(patients.router)
 
 
 @app.exception_handler(BookingError)

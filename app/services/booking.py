@@ -65,6 +65,8 @@ def validate_slot(db, doctor_id: int, start: datetime):
         raise BookingError(400, "Appointments must start on the hour or half hour.")
     if start <= datetime.now(timezone.utc):
         raise BookingError(400, "Cannot book a time in the past.")
+    if start < datetime.now(timezone.utc) + timedelta(hours=1):
+        raise BookingError(400, "Appointments must be booked at least 1 hour in advance.")
 
     hours = (db.query(models.WorkingHours)
              .filter_by(doctor_id=doctor_id, weekday=local.weekday())
