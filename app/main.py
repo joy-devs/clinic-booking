@@ -2,9 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.database import Base, engine
 from app import models
-from app.routers import doctors, appointments
+from app.routers import doctors, appointments, patients
 from app.services.booking import BookingError
-from app.routers import doctors, appointements, patients
 
 Base.metadata.create_all(bind=engine)
 
