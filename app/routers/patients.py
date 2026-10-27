@@ -3,9 +3,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
+from app.schemas import PatientCreate
 from app.routers.appointments import serialize
 
 router = APIRouter(prefix="/patients", tags=["patients"])
+
+
+@router.post("", status_code=201)
+def create_patient(body: PatientCreate, db: Session = Depends(get_db)):
+    patient = models.Patient(name=body.name, phone=body.phone)
+    db.add(patient)
+    db.commit()
+    db.refresh(patient)
+    return {"id": patient.id, "name": patient.name, "phone": patient.phone}
 
 
 @router.get("/{patient_id}/appointments")
