@@ -26,7 +26,22 @@ def to_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
-def get_available_slots(db, doctor_id: int, day: date):
+def make_slot_id(doctor_id: int, start: datetime) -> str:
+    local = as_utc(start).astimezone(EAT)
+    return f"{doctor_id}-{local:%Y%m%dT%H%M}"
+
+
+def parse_slot_id(slot_id: str):
+    try:
+        doctor_part, stamp = slot_id.split("-", 1)
+        start = datetime.strptime(stamp, "%Y%m%dT%H%M").replace(tzinfo=EAT)
+        return int(doctor_part), start.astimezone(timezone.utc)
+    except (ValueError, TypeError):
+        raise BookingError(400, "Invalid slot_id. Expected a format like 1-20261103T0900.")
+
+
+def get_day_slots(db, doctor_id: int, day: date):
+    """Every 30-minute slot in the doctor's working hours, with a status."""
     hours = (db.query(models.WorkingHours)
              .filter_by(doctor_id=doctor_id, weekday=day.weekday())
              .all())
@@ -46,17 +61,26 @@ def get_available_slots(db, doctor_id: int, day: date):
         )
     }
 
-    now = datetime.now(timezone.utc)
+    cutoff = datetime.now(timezone.utc) + timedelta(hours=1)
     slots = []
     for h in hours:
         cur = datetime.combine(day, h.start_time, tzinfo=EAT)
         end = datetime.combine(day, h.end_time, tzinfo=EAT)
         while cur + SLOT <= end:
             start = cur.astimezone(timezone.utc)
-            if start > now and start not in booked:
-                slots.append(start)
+            if start in booked:
+                status = "booked"
+            elif start < cutoff:
+                status = "unavailable"  # in the past or less than 1 hour away
+            else:
+                status = "available"
+            slots.append((start, status))
             cur += SLOT
     return sorted(slots)
+
+
+def get_available_slots(db, doctor_id: int, day: date):
+    return [s for s, status in get_day_slots(db, doctor_id, day) if status == "available"]
 
 
 def validate_slot(db, doctor_id: int, start: datetime):

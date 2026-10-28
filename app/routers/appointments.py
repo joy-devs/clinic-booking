@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas import AppointmentCreate, CancelRequest, RescheduleRequest
 from app.services.booking import (book_appointment, cancel_appointment,
-                                  reschedule_appointment, as_utc, EAT)
+                                  reschedule_appointment, make_slot_id,
+                                  parse_slot_id, BookingError, as_utc, EAT)
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -11,6 +12,7 @@ router = APIRouter(prefix="/appointments", tags=["appointments"])
 def serialize(a):
     return {
         "id": a.id,
+        "slot_id": make_slot_id(a.doctor_id, a.start_time),
         "doctor_id": a.doctor_id,
         "patient_id": a.patient_id,
         "start": as_utc(a.start_time).astimezone(EAT).isoformat(),
@@ -22,7 +24,12 @@ def serialize(a):
 
 @router.post("", status_code=201)
 def create_appointment(body: AppointmentCreate, db: Session = Depends(get_db)):
-    return serialize(book_appointment(db, body.doctor_id, body.patient_id, body.start_time))
+    start = body.start_time
+    if body.slot_id:
+        slot_doctor, start = parse_slot_id(body.slot_id)
+        if slot_doctor != body.doctor_id:
+            raise BookingError(400, "slot_id belongs to a different doctor.")
+    return serialize(book_appointment(db, body.doctor_id, body.patient_id, start))
 
 
 @router.patch("/{appointment_id}/cancel")

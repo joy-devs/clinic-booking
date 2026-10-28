@@ -1,12 +1,19 @@
 from datetime import datetime, time
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AppointmentCreate(BaseModel):
     doctor_id: int
     patient_id: int
-    start_time: datetime  # if no timezone is given, Nairobi time (EAT) is assumed
+    start_time: Optional[datetime] = None  # if no timezone is given, Nairobi time (EAT) is assumed
+    slot_id: Optional[str] = None          # e.g. "1-20261103T0900"
+
+    @model_validator(mode="after")
+    def exactly_one_of_time_or_slot(self):
+        if (self.start_time is None) == (self.slot_id is None):
+            raise ValueError("Provide exactly one of start_time or slot_id.")
+        return self
 
 
 class CancelRequest(BaseModel):
