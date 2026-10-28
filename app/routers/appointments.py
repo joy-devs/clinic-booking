@@ -11,7 +11,7 @@ router = APIRouter(prefix="/appointments", tags=["appointments"])
 
 def serialize(a):
     return {
-        "id": a.id,
+        "appointment_id": a.id,
         "slot_id": make_slot_id(a.doctor_id, a.start_time),
         "doctor_id": a.doctor_id,
         "patient_id": a.patient_id,

@@ -44,5 +44,5 @@ def test_create_patient_and_doctor(client):
         "working_hours": [hours(weekday=0, start="09:00:00", end="11:00:00")]})
     assert d.status_code == 201
     day = next_weekday(0)
-    slots = client.get(f"/doctors/{d.json()['id']}/availability?date={day}").json()["slots"]
+    slots = client.get(f"/doctors/{d.json()['doctor_id']}/availability?date={day}").json()["slots"]
     assert len(slots) == 4

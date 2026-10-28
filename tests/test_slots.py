@@ -42,7 +42,7 @@ def test_cancel_makes_slot_available_again(client):
     slot = slot_at(client, 11)
     appt = client.post("/appointments", json={
         "doctor_id": 1, "patient_id": 1, "slot_id": slot["slot_id"]}).json()
-    client.patch(f"/appointments/{appt['id']}/cancel", json={"reason": "Schedule conflict"})
+    client.patch(f"/appointments/{appt['appointment_id']}/cancel", json={"reason": "Schedule conflict"})
     status = {s["slot_id"]: s["status"] for s in slots_for(client)}
     assert status[slot["slot_id"]] == "available"
 

@@ -15,7 +15,7 @@ def create_patient(body: PatientCreate, db: Session = Depends(get_db)):
     db.add(patient)
     db.commit()
     db.refresh(patient)
-    return {"id": patient.id, "name": patient.name, "phone": patient.phone}
+    return {"patient_id": patient.id, "name": patient.name, "phone": patient.phone}
 
 
 @router.get("/{patient_id}/appointments")
