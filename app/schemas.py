@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -11,6 +11,13 @@ def example_start(hour: int = 9) -> str:
     while d.weekday() > 4:  # skip Saturday and Sunday
         d += timedelta(days=1)
     return datetime(d.year, d.month, d.day, hour, 0, tzinfo=EAT).isoformat()
+
+
+def example_date(days_ahead: int = 7) -> str:
+    d = datetime.now(EAT).date() + timedelta(days=days_ahead)
+    while d.weekday() > 4:
+        d += timedelta(days=1)
+    return d.isoformat()
 
 
 class AppointmentCreate(BaseModel):
@@ -72,5 +79,27 @@ class PatientCreate(BaseModel):
     phone: Optional[str] = None
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"name": "Mary Wanjiku", "phone": "0711111111"}
+        {"name": "Patient full name", "phone": "07XXXXXXXX"}
+    ]})
+
+
+class BlockedSlotCreate(BaseModel):
+    start_time: datetime  # if no timezone is given, Nairobi time (EAT) is assumed
+    end_time: datetime
+    reason: Optional[str] = None
+
+    model_config = ConfigDict(json_schema_extra={"examples": [
+        {"start_time": example_start(12), "end_time": example_start(13),
+         "reason": "Lunch break"}
+    ]})
+
+
+class LeaveCreate(BaseModel):
+    start_date: date
+    end_date: date  # inclusive; use the same date for a single day
+    reason: Optional[str] = None
+
+    model_config = ConfigDict(json_schema_extra={"examples": [
+        {"start_date": example_date(7), "end_date": example_date(7),
+         "reason": "Annual leave"}
     ]})

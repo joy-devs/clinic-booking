@@ -1,6 +1,7 @@
-from datetime import time
+from datetime import datetime, time, timedelta
 from app.database import Base, engine, SessionLocal
 from app import models
+from app.services.booking import BookingError, create_leave, EAT
 
 DOCTORS = [
     ("Dr. Amina Odhiambo", "General Practice"),
@@ -10,26 +11,48 @@ DOCTORS = [
     ("Dr. Faith Njeri", "Gynecology"),
 ]
 
+
+def seed_leave(db):
+    """Sample data: each doctor gets one leave day, on consecutive weekdays."""
+    if db.query(models.DoctorLeave).count() > 0:
+        return
+    day = datetime.now(EAT).date() + timedelta(days=2)
+    for doctor in db.query(models.Doctor).order_by(models.Doctor.id).all():
+        for _ in range(10):
+            while day.weekday() > 4:  # skip weekends
+                day += timedelta(days=1)
+            try:
+                create_leave(db, doctor.id, day, day, "Annual leave (sample data)")
+                day += timedelta(days=1)
+                break
+            except BookingError:  # e.g. a booking already exists that day
+                day += timedelta(days=1)
+    print("Seeded sample leave days.")
+
+
 def seed():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        if db.query(models.Doctor).count() > 0:
+        if db.query(models.Doctor).count() == 0:
+            for name, specialty in DOCTORS:
+                doctor = models.Doctor(name=name, specialty=specialty)
+                db.add(doctor)
+                db.flush()
+                for weekday in range(5):  # Monday to Friday
+                    db.add(models.WorkingHours(
+                        doctor_id=doctor.id, weekday=weekday,
+                        start_time=time(8, 0), end_time=time(17, 0)))
+            db.add(models.Patient(name="Test Patient", phone="0700000000"))
+            db.commit()
+            print("Seeded 5 doctors and 1 patient.")
+        else:
             print("Already seeded.")
-            return
-        for name, specialty in DOCTORS:
-            doctor = models.Doctor(name=name, specialty=specialty)
-            db.add(doctor)
-            db.flush()
-            for weekday in range(5):  # Monday to Friday
-                db.add(models.WorkingHours(
-                    doctor_id=doctor.id, weekday=weekday,
-                    start_time=time(8, 0), end_time=time(17, 0)))
-        db.add(models.Patient(name="Test Patient", phone="0700000000"))
-        db.commit()
-        print("Seeded 5 doctors and 1 patient.")
+        seed_leave(db)
     finally:
         db.close()
 
+
 if __name__ == "__main__":
     seed()
+    
