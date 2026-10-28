@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
 from app.schemas import DoctorCreate, WorkingHoursIn
-from app.services.booking import get_available_slots, SLOT, EAT
+from app.services.booking import (get_available_slots, get_day_slots,
+                                  make_slot_id, SLOT, EAT)
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -90,8 +91,28 @@ def availability(doctor_id: int,
         "doctor_id": doctor_id,
         "date": day.isoformat(),
         "slots": [
-            {"start": s.astimezone(EAT).isoformat(),
+            {"slot_id": make_slot_id(doctor_id, s),
+             "start": s.astimezone(EAT).isoformat(),
              "end": (s + SLOT).astimezone(EAT).isoformat()}
             for s in slots
+        ],
+    }
+
+
+@router.get("/{doctor_id}/slots")
+def day_slots(doctor_id: int,
+              day: date = Query(..., alias="date"),
+              db: Session = Depends(get_db)):
+    if not db.get(models.Doctor, doctor_id):
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    return {
+        "doctor_id": doctor_id,
+        "date": day.isoformat(),
+        "slots": [
+            {"slot_id": make_slot_id(doctor_id, s),
+             "start": s.astimezone(EAT).isoformat(),
+             "end": (s + SLOT).astimezone(EAT).isoformat(),
+             "status": status}
+            for s, status in get_day_slots(db, doctor_id, day)
         ],
     }
