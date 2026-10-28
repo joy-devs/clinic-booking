@@ -58,6 +58,32 @@ def leave_covering(db, doctor_id: int, day: date):
     ).first()
 
 
+def leave_notice(db, doctor_id: int, day: date):
+    """A patient-facing message if the doctor is on leave that day, else None."""
+    leave = leave_covering(db, doctor_id, day)
+    if not leave:
+        return None
+    doctor = db.get(models.Doctor, doctor_id)
+    if leave.start_date == leave.end_date:
+        period = f"on {leave.start_date.isoformat()}"
+    else:
+        period = f"from {leave.start_date.isoformat()} to {leave.end_date.isoformat()}"
+
+    others = []
+    for d in (db.query(models.Doctor)
+              .filter(models.Doctor.id != doctor_id)
+              .order_by(models.Doctor.id).all()):
+        works = db.query(models.WorkingHours).filter_by(
+            doctor_id=d.id, weekday=day.weekday()).first()
+        if works and not leave_covering(db, d.id, day):
+            others.append(d.name)
+
+    message = f"{doctor.name} is on leave {period}."
+    if others:
+        message += " Doctors working that day: " + ", ".join(others) + "."
+    return message
+
+
 def get_day_slots(db, doctor_id: int, day: date):
     """Every 30-minute slot in the doctor's working hours, with a status."""
     hours = (db.query(models.WorkingHours)
@@ -128,8 +154,9 @@ def validate_slot(db, doctor_id: int, start: datetime):
     if not within:
         raise BookingError(400, "Slot is outside the doctor's working hours.")
 
-    if leave_covering(db, doctor_id, local.date()):
-        raise BookingError(409, "The doctor is on leave on that date.")
+    notice = leave_notice(db, doctor_id, local.date())
+    if notice:
+        raise BookingError(409, notice)
 
     if blocks_between(db, doctor_id, start, start + SLOT):
         raise BookingError(409, "The doctor is unavailable at that time.")
@@ -220,7 +247,7 @@ def create_block(db, doctor_id: int, start: datetime, end: datetime, reason):
     ).all()]
     if clashes:
         raise BookingError(
-            409, f"Booked appointments exist in that period (ids {clashes}). "
+            409, f"Booked appointments exist in that period (appointment_ids {clashes}). "
                  "Cancel or reschedule them first.")
 
     block = models.BlockedSlot(doctor_id=doctor_id, start_time=start,
@@ -231,8 +258,8 @@ def create_block(db, doctor_id: int, start: datetime, end: datetime, reason):
     return block
 
 
-def delete_block(db, doctor_id: int, block_id: int):
-    block = db.get(models.BlockedSlot, block_id)
+def delete_block(db, doctor_id: int, blocked_slot_id: int):
+    block = db.get(models.BlockedSlot, blocked_slot_id)
     if not block or block.doctor_id != doctor_id:
         raise BookingError(404, "Blocked period not found.")
     db.delete(block)
@@ -253,7 +280,7 @@ def create_leave(db, doctor_id: int, start_date: date, end_date: date, reason):
         models.DoctorLeave.end_date >= start_date,
     ).first()
     if overlap:
-        raise BookingError(409, f"Overlaps existing leave (id {overlap.id}).")
+        raise BookingError(409, f"Overlaps existing leave (leave_id {overlap.id}).")
 
     range_start = datetime.combine(start_date, time.min, tzinfo=EAT).astimezone(timezone.utc)
     range_end = datetime.combine(end_date + timedelta(days=1), time.min,
@@ -266,7 +293,7 @@ def create_leave(db, doctor_id: int, start_date: date, end_date: date, reason):
     ).all()]
     if clashes:
         raise BookingError(
-            409, f"Booked appointments exist in that period (ids {clashes}). "
+            409, f"Booked appointments exist in that period (appointment_ids {clashes}). "
                  "Cancel or reschedule them first.")
 
     leave = models.DoctorLeave(doctor_id=doctor_id, start_date=start_date,

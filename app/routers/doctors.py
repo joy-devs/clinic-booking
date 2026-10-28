@@ -6,7 +6,7 @@ from app import models
 from app.schemas import DoctorCreate, WorkingHoursIn, BlockedSlotCreate, LeaveCreate
 from app.services.booking import (get_available_slots, get_day_slots, make_slot_id,
                                   create_block, delete_block, create_leave,
-                                  delete_leave, as_utc, SLOT, EAT)
+                                  delete_leave, leave_notice, as_utc, SLOT, EAT)
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -165,6 +165,7 @@ def availability(doctor_id: int,
     return {
         "doctor_id": doctor_id,
         "date": day.isoformat(),
+        "notice": leave_notice(db, doctor_id, day),
         "slots": [
             {"slot_id": make_slot_id(doctor_id, s),
              "start": s.astimezone(EAT).isoformat(),
@@ -183,6 +184,7 @@ def day_slots(doctor_id: int,
     return {
         "doctor_id": doctor_id,
         "date": day.isoformat(),
+        "notice": leave_notice(db, doctor_id, day),
         "slots": [
             {"slot_id": make_slot_id(doctor_id, s),
              "start": s.astimezone(EAT).isoformat(),
