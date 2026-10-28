@@ -40,6 +40,24 @@ def parse_slot_id(slot_id: str):
         raise BookingError(400, "Invalid slot_id. Expected a format like 1-20261103T0900.")
 
 
+def blocks_between(db, doctor_id: int, start: datetime, end: datetime):
+    """Blocked periods that overlap the range [start, end)."""
+    return db.query(models.BlockedSlot).filter(
+        models.BlockedSlot.doctor_id == doctor_id,
+        models.BlockedSlot.start_time < end,
+        models.BlockedSlot.end_time > start,
+    ).all()
+
+
+def leave_covering(db, doctor_id: int, day: date):
+    """The leave period that covers this date, if any."""
+    return db.query(models.DoctorLeave).filter(
+        models.DoctorLeave.doctor_id == doctor_id,
+        models.DoctorLeave.start_date <= day,
+        models.DoctorLeave.end_date >= day,
+    ).first()
+
+
 def get_day_slots(db, doctor_id: int, day: date):
     """Every 30-minute slot in the doctor's working hours, with a status."""
     hours = (db.query(models.WorkingHours)
@@ -60,6 +78,9 @@ def get_day_slots(db, doctor_id: int, day: date):
             models.Appointment.start_time < day_end,
         )
     }
+    blocks = [(as_utc(b.start_time), as_utc(b.end_time))
+              for b in blocks_between(db, doctor_id, day_start, day_end)]
+    on_leave = leave_covering(db, doctor_id, day) is not None
 
     cutoff = datetime.now(timezone.utc) + timedelta(hours=1)
     slots = []
@@ -70,6 +91,10 @@ def get_day_slots(db, doctor_id: int, day: date):
             start = cur.astimezone(timezone.utc)
             if start in booked:
                 status = "booked"
+            elif on_leave:
+                status = "on_leave"     # doctor is off for the whole day
+            elif any(bs < start + SLOT and start < be for bs, be in blocks):
+                status = "blocked"      # doctor away: lunch, break
             elif start < cutoff:
                 status = "unavailable"  # in the past or less than 1 hour away
             else:
@@ -102,6 +127,12 @@ def validate_slot(db, doctor_id: int, start: datetime):
     )
     if not within:
         raise BookingError(400, "Slot is outside the doctor's working hours.")
+
+    if leave_covering(db, doctor_id, local.date()):
+        raise BookingError(409, "The doctor is on leave on that date.")
+
+    if blocks_between(db, doctor_id, start, start + SLOT):
+        raise BookingError(409, "The doctor is unavailable at that time.")
 
     taken = db.query(models.Appointment).filter(
         models.Appointment.doctor_id == doctor_id,
@@ -167,3 +198,88 @@ def reschedule_appointment(db, appointment_id: int, new_start: datetime):
         raise BookingError(409, "That slot was just booked by someone else.")
     db.refresh(appt)
     return appt
+
+
+def create_block(db, doctor_id: int, start: datetime, end: datetime, reason):
+    if not db.get(models.Doctor, doctor_id):
+        raise BookingError(404, "Doctor not found.")
+    start, end = to_utc(start), to_utc(end)
+    for t in (start.astimezone(EAT), end.astimezone(EAT)):
+        if t.minute % 30 != 0 or t.second or t.microsecond:
+            raise BookingError(400, "Blocked times must be on the hour or half hour.")
+    if end <= start:
+        raise BookingError(400, "end_time must be after start_time.")
+    if end <= datetime.now(timezone.utc):
+        raise BookingError(400, "Cannot block a time in the past.")
+
+    clashes = [a.id for a in db.query(models.Appointment).filter(
+        models.Appointment.doctor_id == doctor_id,
+        models.Appointment.status == "booked",
+        models.Appointment.start_time < end,
+        models.Appointment.start_time > start - SLOT,
+    ).all()]
+    if clashes:
+        raise BookingError(
+            409, f"Booked appointments exist in that period (ids {clashes}). "
+                 "Cancel or reschedule them first.")
+
+    block = models.BlockedSlot(doctor_id=doctor_id, start_time=start,
+                               end_time=end, reason=reason)
+    db.add(block)
+    db.commit()
+    db.refresh(block)
+    return block
+
+
+def delete_block(db, doctor_id: int, block_id: int):
+    block = db.get(models.BlockedSlot, block_id)
+    if not block or block.doctor_id != doctor_id:
+        raise BookingError(404, "Blocked period not found.")
+    db.delete(block)
+    db.commit()
+
+
+def create_leave(db, doctor_id: int, start_date: date, end_date: date, reason):
+    if not db.get(models.Doctor, doctor_id):
+        raise BookingError(404, "Doctor not found.")
+    if end_date < start_date:
+        raise BookingError(400, "end_date must be on or after start_date.")
+    if end_date < datetime.now(EAT).date():
+        raise BookingError(400, "Cannot add leave in the past.")
+
+    overlap = db.query(models.DoctorLeave).filter(
+        models.DoctorLeave.doctor_id == doctor_id,
+        models.DoctorLeave.start_date <= end_date,
+        models.DoctorLeave.end_date >= start_date,
+    ).first()
+    if overlap:
+        raise BookingError(409, f"Overlaps existing leave (id {overlap.id}).")
+
+    range_start = datetime.combine(start_date, time.min, tzinfo=EAT).astimezone(timezone.utc)
+    range_end = datetime.combine(end_date + timedelta(days=1), time.min,
+                                 tzinfo=EAT).astimezone(timezone.utc)
+    clashes = [a.id for a in db.query(models.Appointment).filter(
+        models.Appointment.doctor_id == doctor_id,
+        models.Appointment.status == "booked",
+        models.Appointment.start_time >= range_start,
+        models.Appointment.start_time < range_end,
+    ).all()]
+    if clashes:
+        raise BookingError(
+            409, f"Booked appointments exist in that period (ids {clashes}). "
+                 "Cancel or reschedule them first.")
+
+    leave = models.DoctorLeave(doctor_id=doctor_id, start_date=start_date,
+                               end_date=end_date, reason=reason)
+    db.add(leave)
+    db.commit()
+    db.refresh(leave)
+    return leave
+
+
+def delete_leave(db, doctor_id: int, leave_id: int):
+    leave = db.get(models.DoctorLeave, leave_id)
+    if not leave or leave.doctor_id != doctor_id:
+        raise BookingError(404, "Leave not found.")
+    db.delete(leave)
+    db.commit()
