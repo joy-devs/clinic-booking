@@ -13,7 +13,7 @@ router = APIRouter(prefix="/doctors", tags=["doctors"])
 
 def serialize_doctor(d):
     return {
-        "id": d.id,
+        "doctor_id": d.id,
         "name": d.name,
         "specialty": d.specialty,
         "working_hours": [
@@ -27,7 +27,7 @@ def serialize_doctor(d):
 
 def serialize_block(b):
     return {
-        "id": b.id,
+        "blocked_slot_id": b.id,
         "doctor_id": b.doctor_id,
         "start": as_utc(b.start_time).astimezone(EAT).isoformat(),
         "end": as_utc(b.end_time).astimezone(EAT).isoformat(),
@@ -37,7 +37,7 @@ def serialize_block(b):
 
 def serialize_leave(l, doctor_name=None):
     data = {
-        "id": l.id,
+        "leave_id": l.id,
         "doctor_id": l.doctor_id,
         "start_date": l.start_date.isoformat(),
         "end_date": l.end_date.isoformat(),
@@ -123,9 +123,10 @@ def list_blocked_slots(doctor_id: int, db: Session = Depends(get_db)):
     return [serialize_block(b) for b in blocks]
 
 
-@router.delete("/{doctor_id}/blocked-slots/{block_id}")
-def remove_blocked_slot(doctor_id: int, block_id: int, db: Session = Depends(get_db)):
-    delete_block(db, doctor_id, block_id)
+@router.delete("/{doctor_id}/blocked-slots/{blocked_slot_id}")
+def remove_blocked_slot(doctor_id: int, blocked_slot_id: int,
+                        db: Session = Depends(get_db)):
+    delete_block(db, doctor_id, blocked_slot_id)
     return {"detail": "Blocked period removed."}
 
 

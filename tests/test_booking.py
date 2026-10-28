@@ -61,7 +61,7 @@ def test_booked_slot_leaves_availability(client):
 
 
 def test_cancel_frees_slot_for_rebooking(client):
-    appt_id = book(client, slot(9)).json()["id"]
+    appt_id = book(client, slot(9)).json()["appointment_id"]
     r = client.patch(f"/appointments/{appt_id}/cancel", json={"reason": "Unwell"})
     assert r.status_code == 200
     assert r.json()["status"] == "cancelled"
@@ -69,14 +69,14 @@ def test_cancel_frees_slot_for_rebooking(client):
 
 
 def test_cancel_twice_fails(client):
-    appt_id = book(client, slot(9)).json()["id"]
+    appt_id = book(client, slot(9)).json()["appointment_id"]
     client.patch(f"/appointments/{appt_id}/cancel", json={"reason": "Unwell"})
     r = client.patch(f"/appointments/{appt_id}/cancel", json={"reason": "Again"})
     assert r.status_code == 409
 
 
 def test_reschedule_frees_original_slot(client):
-    appt_id = book(client, slot(9)).json()["id"]
+    appt_id = book(client, slot(9)).json()["appointment_id"]
     r = client.patch(f"/appointments/{appt_id}/reschedule",
                      json={"start_time": slot(10)})
     assert r.status_code == 200
@@ -86,7 +86,7 @@ def test_reschedule_frees_original_slot(client):
 
 
 def test_reschedule_cancelled_fails(client):
-    appt_id = book(client, slot(9)).json()["id"]
+    appt_id = book(client, slot(9)).json()["appointment_id"]
     client.patch(f"/appointments/{appt_id}/cancel", json={"reason": "Unwell"})
     r = client.patch(f"/appointments/{appt_id}/reschedule",
                      json={"start_time": slot(10)})
@@ -94,7 +94,7 @@ def test_reschedule_cancelled_fails(client):
 
 
 def test_reschedule_to_taken_slot_fails(client):
-    first = book(client, slot(9)).json()["id"]
+    first = book(client, slot(9)).json()["appointment_id"]
     book(client, slot(10), patient_id=2)
     r = client.patch(f"/appointments/{first}/reschedule",
                      json={"start_time": slot(10)})
