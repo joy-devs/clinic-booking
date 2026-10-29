@@ -2,6 +2,9 @@ from datetime import date, datetime, time
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+# The "examples" below are fill-in templates shown in the API docs (Swagger).
+# They tell the user what to enter; they are not real values.
+
 
 class AppointmentCreate(BaseModel):
     doctor_id: int
@@ -10,8 +13,9 @@ class AppointmentCreate(BaseModel):
     slot_id: Optional[str] = None          # e.g. "1-20261103T0900" (use instead of start_time)
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"doctor_id": 0, "patient_id": 0,
-         "start_time": "YYYY-MM-DDTHH:MM:00+03:00"}
+        {"doctor_id": "Enter doctor id",
+         "patient_id": "Enter patient id",
+         "start_time": "Enter date and time, e.g. 2026-11-11T09:30:00+03:00"}
     ]})
 
     @model_validator(mode="after")
@@ -25,7 +29,7 @@ class CancelRequest(BaseModel):
     reason: str = Field(min_length=1)
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"reason": "Reason for cancelling"}
+        {"reason": "Enter reason for cancelling"}
     ]})
 
 
@@ -33,7 +37,7 @@ class RescheduleRequest(BaseModel):
     start_time: datetime
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"start_time": "YYYY-MM-DDTHH:MM:00+03:00"}
+        {"start_time": "Enter new date and time, e.g. 2026-11-11T09:30:00+03:00"}
     ]})
 
 
@@ -43,7 +47,9 @@ class WorkingHoursIn(BaseModel):
     end_time: time
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"weekday": 0, "start_time": "HH:MM:00", "end_time": "HH:MM:00"}
+        {"weekday": "Enter weekday number (0 = Monday ... 6 = Sunday)",
+         "start_time": "Enter start time, e.g. 08:00:00",
+         "end_time": "Enter end time, e.g. 17:00:00"}
     ]})
 
 
@@ -53,8 +59,12 @@ class DoctorCreate(BaseModel):
     working_hours: List[WorkingHoursIn] = Field(min_length=1)
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"name": "Doctor full name", "specialty": "Specialty",
-         "working_hours": [{"weekday": 0, "start_time": "08:00:00", "end_time": "17:00:00"}]}
+        {"name": "Enter doctor full name",
+         "specialty": "Enter specialty",
+         "working_hours": [
+             {"weekday": "Enter weekday number (0 = Monday ... 6 = Sunday)",
+              "start_time": "Enter start time, e.g. 08:00:00",
+              "end_time": "Enter end time, e.g. 17:00:00"}]}
     ]})
 
 
@@ -63,7 +73,8 @@ class PatientCreate(BaseModel):
     phone: Optional[str] = None
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"name": "Patient full name", "phone": "07XXXXXXXX"}
+        {"name": "Enter patient full name",
+         "phone": "Enter phone number"}
     ]})
 
 
@@ -73,9 +84,9 @@ class BlockedSlotCreate(BaseModel):
     reason: Optional[str] = None
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"start_time": "YYYY-MM-DDTHH:MM:00+03:00",
-         "end_time": "YYYY-MM-DDTHH:MM:00+03:00",
-         "reason": "Reason, e.g. Lunch break"}
+        {"start_time": "Enter start date and time, e.g. 2026-11-11T12:00:00+03:00",
+         "end_time": "Enter end date and time, e.g. 2026-11-11T13:00:00+03:00",
+         "reason": "Enter reason, e.g. Lunch break"}
     ]})
 
 
@@ -85,6 +96,7 @@ class LeaveCreate(BaseModel):
     reason: Optional[str] = None
 
     model_config = ConfigDict(json_schema_extra={"examples": [
-        {"start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD",
-         "reason": "Reason, e.g. Annual leave"}
+        {"start_date": "Enter first day of leave, e.g. 2026-11-11",
+         "end_date": "Enter last day of leave, e.g. 2026-11-11",
+         "reason": "Enter reason, e.g. Annual leave"}
     ]})
