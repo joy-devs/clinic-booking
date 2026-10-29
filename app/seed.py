@@ -11,6 +11,38 @@ DOCTORS = [
     ("Dr. Faith Njeri", "Gynecology"),
 ]
 
+# Weekend rota: doctor name -> list of (weekday, start, end).
+# Weekday numbers: 5 = Saturday, 6 = Sunday. Each doctor works one weekend day.
+WEEKEND_ROTA = {
+    "Dr. Amina Odhiambo": [(5, time(8, 0), time(13, 0))],
+    "Dr. Brian Kamau": [(5, time(8, 0), time(13, 0))],
+    "Dr. Grace Mwangi": [(5, time(8, 0), time(13, 0))],
+    "Dr. Peter Otieno": [(6, time(9, 0), time(13, 0))],
+    "Dr. Faith Njeri": [(6, time(9, 0), time(13, 0))],
+}
+
+
+def seed_weekend_hours(db):
+    """Add weekend shifts for the rota doctors. Safe to run again: a doctor who
+    already has hours on a weekday is left alone, so nothing is overwritten."""
+    added = 0
+    for name, shifts in WEEKEND_ROTA.items():
+        doctor = db.query(models.Doctor).filter_by(name=name).first()
+        if not doctor:
+            continue
+        for weekday, start, end in shifts:
+            exists = db.query(models.WorkingHours).filter_by(
+                doctor_id=doctor.id, weekday=weekday).first()
+            if exists:
+                continue
+            db.add(models.WorkingHours(doctor_id=doctor.id, weekday=weekday,
+                                       start_time=start, end_time=end))
+            added += 1
+    if added:
+        db.commit()
+        print(f"Added {added} weekend shifts.")
+    return added
+
 
 def seed_leave(db):
     """Starting roster: each doctor gets one leave day, on consecutive weekdays.
@@ -57,6 +89,7 @@ def seed():
             print("Seeded 5 doctors and 1 patient.")
         else:
             print("Already seeded.")
+        seed_weekend_hours(db)
         seed_leave(db)
     finally:
         db.close()
