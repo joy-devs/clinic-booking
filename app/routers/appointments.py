@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas import AppointmentCreate, CancelRequest, RescheduleRequest
@@ -26,23 +26,57 @@ def serialize(a):
 
 @router.get("")
 def list_appointments(
-    doctor: Optional[int] = None,
-    patient: Optional[int] = None,
-    date: Optional[date] = None,
+    appointment_id: Optional[str] = None,
+    doctor: Optional[str] = None,
+    patient: Optional[str] = None,
+    date: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """
-    List appointments with optional query parameter filters:
+    List appointments. Leave filters blank to list all appointments, 
+    or filter by:
+    - `?appointment_id=1`
     - `?doctor=1`
     - `?patient=4`
-    - `?date=2026-10-29`
-    - Or any combination of them.
+    - `?date=2026-11-11`
+    - `?start_time=2026-11-11T09:30:00+03:00`
+    - `?end_time=2026-11-11T10:00:00+03:00`
     """
+    appt_id = int(appointment_id) if appointment_id and appointment_id.strip() else None
+    doc_id = int(doctor) if doctor and doctor.strip() else None
+    pat_id = int(patient) if patient and patient.strip() else None
+    
+    parsed_date = None
+    if date and date.strip():
+        try:
+            parsed_date = date.fromisoformat(date.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    parsed_start = None
+    if start_time and start_time.strip():
+        try:
+            parsed_start = datetime.fromisoformat(start_time.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid start_time format. Use ISO format (e.g. 2026-11-11T09:30:00+03:00).")
+
+    parsed_end = None
+    if end_time and end_time.strip():
+        try:
+            parsed_end = datetime.fromisoformat(end_time.strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid end_time format. Use ISO format (e.g. 2026-11-11T10:00:00+03:00).")
+
     appointments = get_filtered_appointments(
         db=db,
-        doctor_id=doctor,
-        patient_id=patient,
-        appointment_date=date
+        doctor_id=doc_id,
+        patient_id=pat_id,
+        appointment_date=parsed_date,
+        appointment_id=appt_id,
+        start_time=parsed_start,
+        end_time=parsed_end
     )
     return [serialize(a) for a in appointments]
 

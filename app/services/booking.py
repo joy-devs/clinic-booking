@@ -232,11 +232,17 @@ def get_filtered_appointments(
     db, 
     doctor_id: int | None = None, 
     patient_id: int | None = None, 
-    appointment_date: date | None = None
+    appointment_date: date | None = None,
+    appointment_id: int | None = None,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None
 ):
     """Retrieve appointments with optional query parameter filters."""
     query = db.query(models.Appointment)
     
+    if appointment_id is not None:
+        query = query.filter(models.Appointment.id == appointment_id)
+        
     if doctor_id is not None:
         query = query.filter(models.Appointment.doctor_id == doctor_id)
     
@@ -250,6 +256,14 @@ def get_filtered_appointments(
             models.Appointment.start_time >= day_start,
             models.Appointment.start_time < day_end
         )
+        
+    if start_time is not None:
+        utc_start = to_utc(start_time)
+        query = query.filter(models.Appointment.start_time == utc_start)
+        
+    if end_time is not None:
+        utc_end = to_utc(end_time)
+        query = query.filter(models.Appointment.end_time == utc_end)
         
     return query.all()
 
