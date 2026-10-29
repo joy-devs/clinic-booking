@@ -1,5 +1,6 @@
 from datetime import datetime, date, time, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from app import models
 
 EAT = timezone(timedelta(hours=3))  # Nairobi, no daylight saving
@@ -118,7 +119,7 @@ def get_day_slots(db, doctor_id: int, day: date):
             if start in booked:
                 status = "booked"
             elif on_leave:
-                status = "on_leave"     # doctor is off for the whole day
+                status = "on_leave"    # doctor is off for the whole day
             elif any(bs < start + SLOT and start < be for bs, be in blocks):
                 status = "blocked"      # doctor away: lunch, break
             elif start < cutoff:
@@ -179,8 +180,8 @@ def book_appointment(db, doctor_id: int, patient_id: int, start: datetime):
     validate_slot(db, doctor_id, start)
 
     appt = models.Appointment(doctor_id=doctor_id, patient_id=patient_id,
-                              start_time=start, end_time=start + SLOT,
-                              status="booked")
+                            start_time=start, end_time=start + SLOT,
+                            status="booked")
     db.add(appt)
     try:
         db.commit()
@@ -227,6 +228,32 @@ def reschedule_appointment(db, appointment_id: int, new_start: datetime):
     return appt
 
 
+def get_filtered_appointments(
+    db, 
+    doctor_id: int | None = None, 
+    patient_id: int | None = None, 
+    appointment_date: date | None = None
+):
+    """Retrieve appointments with optional query parameter filters."""
+    query = db.query(models.Appointment)
+    
+    if doctor_id is not None:
+        query = query.filter(models.Appointment.doctor_id == doctor_id)
+    
+    if patient_id is not None:
+        query = query.filter(models.Appointment.patient_id == patient_id)
+        
+    if appointment_date is not None:
+        day_start = datetime.combine(appointment_date, time.min, tzinfo=EAT).astimezone(timezone.utc)
+        day_end = day_start + timedelta(days=1)
+        query = query.filter(
+            models.Appointment.start_time >= day_start,
+            models.Appointment.start_time < day_end
+        )
+        
+    return query.all()
+
+
 def create_block(db, doctor_id: int, start: datetime, end: datetime, reason):
     if not db.get(models.Doctor, doctor_id):
         raise BookingError(404, "Doctor not found.")
@@ -251,7 +278,7 @@ def create_block(db, doctor_id: int, start: datetime, end: datetime, reason):
                  "Cancel or reschedule them first.")
 
     block = models.BlockedSlot(doctor_id=doctor_id, start_time=start,
-                               end_time=end, reason=reason)
+                             end_time=end, reason=reason)
     db.add(block)
     db.commit()
     db.refresh(block)
@@ -297,7 +324,7 @@ def create_leave(db, doctor_id: int, start_date: date, end_date: date, reason):
                  "Cancel or reschedule them first.")
 
     leave = models.DoctorLeave(doctor_id=doctor_id, start_date=start_date,
-                               end_date=end_date, reason=reason)
+                             end_date=end_date, reason=reason)
     db.add(leave)
     db.commit()
     db.refresh(leave)
