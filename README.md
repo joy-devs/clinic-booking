@@ -98,6 +98,7 @@ New doctors, patients, schedules, blocked periods and leave are added as data th
 
 | Method and path | Purpose |
 |---|---|
+| `GET /appointments` | List all appointments, or filter by `appointment_id`, `doctor`, `patient`, `date`, `start_time`, and `end_time` |
 | `POST /appointments` | Book a slot, using either `start_time` or a `slot_id` |
 | `PATCH /appointments/{appointment_id}/cancel` | Cancel with a reason |
 | `PATCH /appointments/{appointment_id}/reschedule` | Move to a new slot |
@@ -126,27 +127,12 @@ Checks run in this order: doctor and patient exist (404), on the hour or half ho
 
 ## Running locally
 
-```
+```bash
 python -m venv venv
-venv\Scripts\activate          # Mac/Linux: source venv/bin/activate
+venv\Scripts\activate        # Mac/Linux: source venv/bin/activate
 pip install -r requirements.txt
 python -m app.seed             # loads doctors, weekend rota, a test patient and leave
 uvicorn app.main:app --reload
-```
-
-Open http://127.0.0.1:8000/docs. By default the app uses a local SQLite file. To use PostgreSQL, set `DATABASE_URL` (for example in a `.env` file).
-
-### Tests
-
-There are 56 tests, each using a fresh in-memory database:
-
-```
-python -m pytest -v
-```
-
-They cover booking, double booking, cancel and reschedule, working hours and the weekend rota, slot ids and statuses, blocked periods, leave and leave notices, the patient list, and the order of the API docs.
-
----
 
 ## 3. Deployment and CI/CD
 
