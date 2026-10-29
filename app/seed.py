@@ -13,21 +13,30 @@ DOCTORS = [
 
 
 def seed_leave(db):
-    """Sample data: each doctor gets one leave day, on consecutive weekdays."""
+    """Starting roster: each doctor gets one leave day, on consecutive weekdays.
+    The clinic replaces these with real dates using the leave endpoints."""
+    # Relabel rows created earlier with the old "(sample data)" wording
+    old = (db.query(models.DoctorLeave)
+           .filter(models.DoctorLeave.reason.like("%(sample data)")).all())
+    for row in old:
+        row.reason = "Annual leave"
+    if old:
+        db.commit()
+        print(f"Relabelled {len(old)} leave entries.")
     if db.query(models.DoctorLeave).count() > 0:
         return
-    day = datetime.now(EAT).date() + timedelta(days=2)
+    day = datetime.now(EAT).date() + timedelta(days=14)
     for doctor in db.query(models.Doctor).order_by(models.Doctor.id).all():
         for _ in range(10):
             while day.weekday() > 4:  # skip weekends
                 day += timedelta(days=1)
             try:
-                create_leave(db, doctor.id, day, day, "Annual leave (sample data)")
+                create_leave(db, doctor.id, day, day, "Annual leave")
                 day += timedelta(days=1)
                 break
             except BookingError:  # e.g. a booking already exists that day
                 day += timedelta(days=1)
-    print("Seeded sample leave days.")
+    print("Seeded leave days.")
 
 
 def seed():
@@ -55,4 +64,3 @@ def seed():
 
 if __name__ == "__main__":
     seed()
-    

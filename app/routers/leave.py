@@ -11,9 +11,12 @@ router = APIRouter(prefix="/leave", tags=["leave"])
 
 
 @router.get("")
-def clinic_leave(day: Optional[date] = Query(None, alias="date"),
+def clinic_leave(day: Optional[date] = Query(
+                     None, alias="date",
+                     description=("Optional. Leave empty to see every doctor's upcoming leave, "
+                                  "or enter one date (YYYY-MM-DD) to see who is on leave that day.")),
                  db: Session = Depends(get_db)):
-    """All doctors' upcoming leave. Add ?date=YYYY-MM-DD to see who is off that day."""
+    """Who is on leave. Without a date: all doctors' upcoming leave. With a date: only the doctors off that day."""
     query = (db.query(models.DoctorLeave, models.Doctor.name)
              .join(models.Doctor, models.Doctor.id == models.DoctorLeave.doctor_id))
     if day:
