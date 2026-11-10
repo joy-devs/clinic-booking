@@ -1,11 +1,14 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Security
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, RedirectResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.database import Base, engine
 from app import models
 from app.routers import doctors, patients, appointments, leave
 from app.schemas import FORM_EXAMPLES
 from app.services.booking import BookingError
+from app.middleware import add_observability_middleware
+from app.auth import verify_api_key
 
 Base.metadata.create_all(bind=engine)
 
@@ -18,11 +21,54 @@ TAGS = [
 ]
 
 app = FastAPI(title="Clinic Booking API", openapi_tags=TAGS)
-app.include_router(doctors.router)
-app.include_router(patients.router)
-app.include_router(appointments.router)
-app.include_router(leave.router)
 
+# 1. Initialize and expose Prometheus metrics at /metrics (Public)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+
+# 2. Register Structured Logging & Observability Middleware
+app.middleware("http")(add_observability_middleware)
+
+
+# ==========================================
+# PUBLIC ENDPOINTS & ROUTERS
+# ==========================================
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+# Patients registration remains fully public
+app.include_router(patients.router)
+
+
+# ==========================================
+# HYBRID & PROTECTED ROUTERS
+# ==========================================
+
+# Doctors: GET is public for browsing, POST/DELETE are secured in the router
+app.include_router(doctors.router)
+
+# Appointments and Leave: Fully protected with API key
+app.include_router(
+    appointments.router, 
+    dependencies=[Security(verify_api_key)]
+)
+
+app.include_router(
+    leave.router, 
+    dependencies=[Security(verify_api_key)]
+)
+
+
+# ==========================================
+# OPENAPI & EXCEPTION HANDLERS
+# ==========================================
 
 def custom_openapi():
     """Build the API docs, then put our form templates in with their keys in order."""
@@ -45,13 +91,3 @@ app.openapi = custom_openapi
 @app.exception_handler(BookingError)
 async def booking_error_handler(request: Request, exc: BookingError):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-
-
-@app.get("/", include_in_schema=False)
-def root():
-    return RedirectResponse(url="/docs")
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
