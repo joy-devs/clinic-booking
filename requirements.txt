@@ -6,3 +6,4 @@ python-dotenv
 pytest
 httpx
 prometheus-fastapi-instrumentator>=6.0.0
+python-jose[cryptography]
