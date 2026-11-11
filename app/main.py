@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.database import Base, engine
 from app import models
-from app.routers import doctors, patients, appointments, leave
+from app.routers import doctors, patients, appointments, leave, auth_routes, observability_routes
 from app.schemas import FORM_EXAMPLES
 from app.services.booking import BookingError
 from app.middleware import add_observability_middleware
@@ -18,6 +18,8 @@ TAGS = [
     {"name": "patients"},
     {"name": "appointments"},
     {"name": "leave"},
+    {"name": "authentication"},
+    {"name": "observability"},
 ]
 
 app = FastAPI(title="Clinic Booking API", openapi_tags=TAGS)
@@ -45,6 +47,12 @@ def health():
 
 # Patients registration remains fully public
 app.include_router(patients.router)
+
+# Authentication routes (Login & Logout)
+app.include_router(auth_routes.router)
+
+# Observability and Insights hub routes
+app.include_router(observability_routes.router)
 
 
 # ==========================================
