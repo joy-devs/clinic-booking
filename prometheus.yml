@@ -5,4 +5,4 @@ scrape_configs:
   - job_name: 'fastapi_clinic'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['host.docker.internal:8000']
+      - targets: ['https://clinic-booking-hteu.onrender.com/docs']
